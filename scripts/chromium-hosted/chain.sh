@@ -177,6 +177,8 @@ apk() {
   light_disk
   export_cache_env
   ensure_swap
+  gh release view "$BASE_TAG" -R "$(repo)" > /dev/null 2>&1 \
+    || die "no $BASE_TAG release: run the chromium-hosted-build workflow first"
   download_unpack src "$BASE_TAG"
   download_unpack base "$BASE_TAG"
   ensure_system_deps
