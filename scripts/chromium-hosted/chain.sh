@@ -46,13 +46,13 @@ solutions = [{'name': 'src', 'url': '$(config_value chromiumRepository)', 'deps_
 target_os = ['android']
 EOF
 
-  tools/depot_tools/ensure_bootstrap > prep-bootstrap.log 2>&1 || die "depot_tools bootstrap failed"
+  "$ROOT"/tools/depot_tools/ensure_bootstrap > prep-bootstrap.log 2>&1 || die "depot_tools bootstrap failed"
   cd checkout
-  tools/depot_tools/gclient sync --nohooks --noprehooks --no-history --jobs 8 \
+  "$ROOT"/tools/depot_tools/gclient sync --nohooks --noprehooks --no-history --jobs 8 \
     --revision "src@$(config_value chromiumRevision)" || die "gclient sync failed"
 
   ensure_system_deps
-  tools/depot_tools/gclient runhooks > prep-hooks.log 2>&1 || die "runhooks failed"
+  "$ROOT"/tools/depot_tools/gclient runhooks > prep-hooks.log 2>&1 || die "runhooks failed"
 
   # The chain never runs gclient again; dep metadata is dead weight on the
   # packed tree. Stripping .git only after runhooks: the LASTCHANGE hook
