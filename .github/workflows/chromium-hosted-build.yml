@@ -1,0 +1,382 @@
+# Hosted chained build of the Chromium engine APK for the Yab fork.
+#
+# Why a chain: a Chromium Android build needs ~100 GB of disk and peaks at
+# ~16 GB RAM while linking libchrome.so. A stock ubuntu-latest runner has
+# ~91 GB free (probe run 44346406426), ~140 GB after dropping preinstalled
+# toolchains, so no single job can hold it. This ports the
+# ungoogled-chromium-android technique: every job imports the packed build
+# tree, builds until its time budget ends, and exports the tree for the next
+# job. Eight parts give roughly 35 hours of build time.
+#
+# Manual dispatch only, never on push. It reproduces the Docker sandbox
+# baseline (scripts/chromium-hosted/baseline.json): same Chromium and
+# depot_tools revisions, same GN args, same chrome_public_apk target. The
+# yab adapter patch is NOT applied; Chromium fork work is deferred by the
+# user's standing decision (two-build record).
+#
+# Tree parts are chunked at 9.5 GB to stay under the 10 GB per-artifact cap
+# and carry a sha256 manifest; import fails loudly on corruption. Each job
+# uploads a uniquely named artifact (chromium-build-tree-NN) and the next job
+# downloads exactly that one, so stale parts from earlier jobs never mix in.
+# Known risk, same as the upstream technique this ports: the disk peak when
+# the tree and its packed copy coexist during export. That is what makes this
+# fragile; failures are loud, never silent.
+
+name: Chromium hosted chain
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Fetch and generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Prepare pinned tree
+        run: bash scripts/chromium-hosted/chain.sh prepare
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-00
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-01:
+    name: Build part 1
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 00
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-00
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 01
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-01
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-02:
+    name: Build part 2
+    needs: build-01
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 01
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-01
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 02
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-02
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-03:
+    name: Build part 3
+    needs: build-02
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 02
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-02
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 03
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-03
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-04:
+    name: Build part 4
+    needs: build-03
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 03
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-03
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 04
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-04
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-05:
+    name: Build part 5
+    needs: build-04
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 04
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-04
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 05
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-05
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-06:
+    name: Build part 6
+    needs: build-05
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 05
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-05
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 06
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-06
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-07:
+    name: Build part 7
+    needs: build-06
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 06
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-06
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 07
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-07
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  build-08:
+    name: Build part 8
+    needs: build-07
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 07
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-07
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Build slice
+        run: bash scripts/chromium-hosted/chain.sh slice
+      - name: Export tree
+        run: bash scripts/chromium-hosted/chain.sh export
+      - name: Upload tree 08
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-build-tree-08
+          path: |
+            /mnt/yab-chromium/chain-manifest.txt
+            /mnt/yab-chromium/chain-part.*
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  finish:
+    name: Verify and package APK
+    needs: build-08
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/local/.ghcup /usr/lib/jvm \
+            /usr/lib/google-cloud-sdk /usr/lib/dotnet /usr/share/swift /opt/hostedtoolcache
+          sudo apt-get install -y -qq zstd lsb-release > /dev/null
+      - name: Download tree 08
+        uses: actions/download-artifact@v4
+        with:
+          name: chromium-build-tree-08
+          path: /mnt/yab-chromium/chain
+      - name: Import tree
+        run: bash scripts/chromium-hosted/chain.sh import chain
+      - name: Finish build and package APK
+        run: bash scripts/chromium-hosted/chain.sh finish
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yab-chromium-arm64-apk
+          path: /mnt/yab-chromium/apk-out/
+          retention-days: 30
+          if-no-files-found: error
